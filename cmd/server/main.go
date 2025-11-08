@@ -28,9 +28,22 @@ func main() {
 	}
 	defer database.Close()
 
+	// Run DB migrations
+	if err := db.RunMigrations(database); err != nil {
+		log.Fatalf("migrations error: %v", err)
+	}
+	log.Println("All migrations applied")
+
 	// 3. Setup Gin router
 	router := gin.Default()
+
+	// Health check
 	router.GET("/health", handlers.HealthHandler)
+
+	// Table management APIs
+	tableHandler := handlers.NewTableHandler(database)
+	router.GET("/tables", tableHandler.ListTables)
+	router.POST("/tables", tableHandler.CreateTable)
 
 	// 4. Start server with graceful shutdown
 	srv := &http.Server{
