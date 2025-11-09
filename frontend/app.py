@@ -25,7 +25,7 @@ st.set_page_config(page_title="GoDataFlow Dashboard", layout="wide")
 st.title("📊 GoDataFlow Dashboard")
 st.sidebar.title("Navigation")
 
-menu = st.sidebar.radio("Select a view:", ["List Tables", "Create Table", "View Data", "Manual Refresh"])
+menu = st.sidebar.radio("Select a view:", ["List Tables", "Create Table", "Data Ingestion", "View Data", "Manual Refresh"])
 
 # --- 1. LIST TABLES ---
 if menu == "List Tables":
@@ -88,6 +88,79 @@ elif menu == "Create Table":
                     st.error(f"Failed: {resp.text}")
             except Exception as e:
                 st.error(f"Error sending request: {e}")
+
+# Data Ingestion 
+elif menu == "Data Ingestion":
+    st.title("📥 Data Ingestion")
+
+    # Fetch table list
+    try:
+        tables = requests.get(f"{API_BASE}/tables").json()
+        table_names = [t["table_name"] for t in tables]
+    except Exception as e:
+        st.error(f"Failed to load tables: {e}")
+        table_names = []
+
+    if not table_names:
+        st.warning("No tables found. Please create one first.")
+    else:
+        table_name = st.selectbox("Select Table", table_names)
+        mode = st.radio("Input Mode", ["Form Input", "Raw JSON"])
+
+        if mode == "Form Input":
+            # Fetch columns dynamically
+            try:
+                cols = requests.get(f"{API_BASE}/tables/{table_name}/columns").json()
+            except Exception as e:
+                st.error(f"Failed to fetch columns: {e}")
+                cols = []
+
+            if cols:
+                st.subheader(f"Insert data into `{table_name}`")
+                record = {}
+                for col in cols:
+                    col_name = col["column_name"]
+                    col_type = col["data_type"].lower()
+
+                    # Input widgets based on SQL type
+                    if "int" in col_type:
+                        record[col_name] = st.number_input(f"{col_name} (int)", step=1)
+                    elif "float" in col_type or "double" in col_type or "numeric" in col_type:
+                        record[col_name] = st.number_input(f"{col_name} (float)", step=0.1, format="%.4f")
+                    elif "bool" in col_type:
+                        record[col_name] = st.checkbox(f"{col_name}")
+                    elif "timestamp" in col_type or "date" in col_type:
+                        record[col_name] = st.date_input(f"{col_name}").isoformat()
+                    else:
+                        record[col_name] = st.text_input(f"{col_name} (string)")
+
+                if st.button("Insert Row"):
+                    try:
+                        res = requests.post(f"{API_BASE}/ingest/{table_name}", json=[record])
+                        if res.status_code == 200:
+                            st.success("✅ Row inserted successfully!")
+                        else:
+                            st.error(f"❌ Failed: {res.text}")
+                    except Exception as e:
+                        st.error(f"Request failed: {e}")
+
+        else:  # JSON Mode
+            st.subheader("Insert Data via JSON")
+            st.caption("Example: [{'id':1,'value':42.5}, {'id':2,'value':38.9}]")
+            data_input = st.text_area("Enter JSON array", height=150)
+
+            if st.button("Insert Data"):
+                try:
+                    records = json.loads(data_input)
+                    res = requests.post(f"{API_BASE}/ingest/{table_name}", json=records)
+                    if res.status_code == 200:
+                        st.success("✅ Data inserted successfully!")
+                    else:
+                        st.error(f"❌ Failed: {res.text}")
+                except json.JSONDecodeError:
+                    st.error("Invalid JSON format")
+                except Exception as e:
+                    st.error(f"Request failed: {e}")
 
 # --- 3. VIEW DATA ---
 elif menu == "View Data":
