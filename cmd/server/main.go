@@ -11,6 +11,7 @@ import (
 	"github.com/alkha0306/godataflow/internal/config"
 	"github.com/alkha0306/godataflow/internal/db"
 	"github.com/alkha0306/godataflow/internal/handlers"
+	"github.com/alkha0306/godataflow/internal/scheduler"
 	"github.com/gin-gonic/gin"
 )
 
@@ -33,6 +34,11 @@ func main() {
 		log.Fatalf("migrations error: %v", err)
 	}
 	log.Println("All migrations applied")
+
+	// Start scheduler
+	sched := scheduler.NewJobManager(database)
+	schedCtx, schedCancel := context.WithCancel(context.Background())
+	go sched.Start(schedCtx)
 
 	// 3. Setup Gin router
 	router := gin.Default()
@@ -80,10 +86,15 @@ func main() {
 	signal.Notify(quit, os.Interrupt)
 	<-quit // wait for signal
 
-	log.Println("Shutting down server...")
+	log.Println("Shutting down server and background jobs......")
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
+
+	// Stop scheduler
+	schedCancel()
+	sched.Stop()
+
 	if err := srv.Shutdown(ctx); err != nil {
 		log.Fatalf("Server forced to shutdown: %v", err)
 	}
