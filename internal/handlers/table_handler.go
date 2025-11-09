@@ -113,3 +113,26 @@ func (h *TableHandler) DeleteTable(c *gin.Context) {
 
 	c.JSON(http.StatusOK, gin.H{"message": "table deleted", "table": tableName})
 }
+
+// GET /tables/:name/columns
+func (h *TableHandler) GetTableColumns(c *gin.Context) {
+	tableName := c.Param("name")
+
+	query := `
+		SELECT column_name, data_type
+		FROM information_schema.columns
+		WHERE table_name = $1
+		ORDER BY ordinal_position;
+	`
+
+	var cols []struct {
+		ColumnName string `db:"column_name" json:"column_name"`
+		DataType   string `db:"data_type" json:"data_type"`
+	}
+
+	if err := h.DB.Select(&cols, query, tableName); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to fetch columns"})
+		return
+	}
+	c.JSON(http.StatusOK, cols)
+}
