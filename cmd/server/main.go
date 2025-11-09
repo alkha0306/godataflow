@@ -46,6 +46,10 @@ func main() {
 	router.POST("/tables", tableHandler.CreateTable)
 	router.DELETE("/tables/:name", tableHandler.DeleteTable)
 
+	// Data ingestion API
+	dataIngestHandler := handlers.NewDataIngestHandler(database)
+	router.POST("/ingest/:name", dataIngestHandler.IngestData)
+
 	// 4. Start server with graceful shutdown
 	srv := &http.Server{
 		Addr:    ":" + cfg.Port,
