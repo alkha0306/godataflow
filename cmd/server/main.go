@@ -51,10 +51,11 @@ func main() {
 	router.GET("/tables", tableHandler.ListTables)
 	router.POST("/tables", tableHandler.CreateTable)
 	router.DELETE("/tables/:name", tableHandler.DeleteTable)
+	router.GET("/tables/:name/columns", tableHandler.GetTableColumns)
 
 	// Data ingestion API
 	dataIngestHandler := handlers.NewDataIngestHandler(database)
-	router.POST("/ingest/:name", dataIngestHandler.IngestData)
+	router.POST("/ingest/:table_name", dataIngestHandler.IngestData)
 
 	// Query and Transform data API
 	queryHandler := handlers.NewQueryHandler(database)

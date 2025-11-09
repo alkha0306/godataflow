@@ -2,6 +2,7 @@ import streamlit as st
 import requests
 import pandas as pd
 import time
+import json
 
 # --- CONFIG ---
 API_BASE = "http://localhost:8080"  # your Go server
@@ -137,8 +138,14 @@ elif menu == "Data Ingestion":
                 if st.button("Insert Row"):
                     try:
                         res = requests.post(f"{API_BASE}/ingest/{table_name}", json=[record])
-                        if res.status_code == 200:
-                            st.success("✅ Row inserted successfully!")
+                        if res.ok:  # check any 2xx status
+                            try:
+                                data = res.json()
+                                st.success(f"✅ {data.get('message', 'Row inserted successfully!')}")
+                                st.write("Inserted columns:", data.get("columns"))
+                                st.write("Row count:", data.get("row_count"))
+                            except Exception:
+                                st.success("✅ Row inserted successfully!")
                         else:
                             st.error(f"❌ Failed: {res.text}")
                     except Exception as e:
@@ -153,8 +160,12 @@ elif menu == "Data Ingestion":
                 try:
                     records = json.loads(data_input)
                     res = requests.post(f"{API_BASE}/ingest/{table_name}", json=records)
-                    if res.status_code == 200:
-                        st.success("✅ Data inserted successfully!")
+                    if res.ok:  # safer than checking 200 explicitly
+                        try:
+                            data = res.json()
+                            st.success(f"✅ {data.get('message', 'Row inserted successfully!')}")
+                        except Exception:
+                            st.success("✅ Row inserted successfully!")
                     else:
                         st.error(f"❌ Failed: {res.text}")
                 except json.JSONDecodeError:
