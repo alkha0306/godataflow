@@ -50,6 +50,17 @@ func main() {
 	dataIngestHandler := handlers.NewDataIngestHandler(database)
 	router.POST("/ingest/:name", dataIngestHandler.IngestData)
 
+	// Query and Transform data API
+	queryHandler := handlers.NewQueryHandler(database)
+	router.GET("/query", queryHandler.QueryData)
+	router.GET("/transform", queryHandler.TransformData)
+
+	// saved queries mgmt API
+	queryTemplateHandler := handlers.NewQueryTemplateHandler(database)
+	router.GET("/queries", queryTemplateHandler.ListQueries)
+	router.POST("/queries", queryTemplateHandler.CreateQuery)
+	router.GET("/queries/run/:id", queryTemplateHandler.RunSavedQuery)
+
 	// 4. Start server with graceful shutdown
 	srv := &http.Server{
 		Addr:    ":" + cfg.Port,
