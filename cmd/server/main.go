@@ -44,6 +44,7 @@ func main() {
 	tableHandler := handlers.NewTableHandler(database)
 	router.GET("/tables", tableHandler.ListTables)
 	router.POST("/tables", tableHandler.CreateTable)
+	router.DELETE("/tables/:name", tableHandler.DeleteTable)
 
 	// 4. Start server with graceful shutdown
 	srv := &http.Server{
