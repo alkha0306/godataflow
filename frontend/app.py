@@ -26,7 +26,7 @@ st.set_page_config(page_title="GoDataFlow Dashboard", layout="wide")
 st.title("📊 GoDataFlow Dashboard")
 st.sidebar.title("Navigation")
 
-menu = st.sidebar.radio("Select a view:", ["List Tables", "Create Table", "Data Ingestion", "View Data", "Manual Refresh"])
+menu = st.sidebar.radio("Select a view:", ["List Tables", "Create Table", "Data Ingestion", "View Data", "Delete Table", "Manual Refresh"])
 
 # --- 1. LIST TABLES ---
 if menu == "List Tables":
@@ -175,32 +175,82 @@ elif menu == "Data Ingestion":
 
 # --- 3. VIEW DATA ---
 elif menu == "View Data":
-    st.subheader("View and Visualize Table Data")
+    st.subheader("📊 View and Visualize Table Data")
 
-    resp = requests.get(f"{API_BASE}/tables")
-    tables = resp.json() if resp.status_code == 200 else []
-    table_names = [t["table_name"] for t in tables] if tables else []
+    # Fetch table list
+    try:
+        resp = requests.get(f"{API_BASE}/tables")
+        tables = resp.json() if resp.status_code == 200 else []
+        table_names = [t["table_name"] for t in tables]
+    except Exception as e:
+        st.error(f"Failed to fetch tables: {e}")
+        table_names = []
 
-    selected_table = st.selectbox("Select Table", table_names)
-    if selected_table and st.button("Load Data"):
-        try:
-            resp = requests.get(f"{API_BASE}/query", params={"table": selected_table})
-            if resp.status_code == 200:
-                data = resp.json()
-                if data:
-                    df = pd.DataFrame(data)
-                    st.dataframe(df)
+    if table_names:
+        selected_table = st.selectbox("Select Table", table_names)
 
-                    if "timestamp" in df.columns and "value" in df.columns:
-                        st.line_chart(df.set_index("timestamp")["value"])
+        if selected_table and st.button("Load Data"):
+            try:
+                # Fetch columns
+                cols_resp = requests.get(f"{API_BASE}/tables/{selected_table}/columns")
+                columns = [c["column_name"] for c in cols_resp.json()] if cols_resp.status_code == 200 else []
+
+                # Fetch data
+                data_resp = requests.get(f"{API_BASE}/query", params={"table": selected_table})
+                if data_resp.status_code == 200:
+                    resp_json = data_resp.json()
+                    rows = resp_json.get("data", [])
+                    if rows:
+                        import pandas as pd
+                        df = pd.DataFrame(rows, columns=columns)
+                        st.dataframe(df)  # scrollable table
+
+                        # Detect time-series columns for line chart
+                        ts_cols = [c for c in df.columns if "timestamp" in c.lower() or "date" in c.lower()]
+                        value_cols = [c for c in df.columns if c.lower() not in ts_cols]
+
+                        if ts_cols and value_cols:
+                            for val_col in value_cols:
+                                st.subheader(f"📈 {val_col} over {ts_cols[0]}")
+                                st.line_chart(df.set_index(ts_cols[0])[val_col])
+                        else:
+                            st.info("No suitable time-series columns found for charting.")
                     else:
-                        st.info("No time-series columns detected for chart.")
+                        st.info("No data available in this table.")
                 else:
-                    st.info("No data available in this table.")
-            else:
-                st.error(f"Error fetching data: {resp.text}")
-        except Exception as e:
-            st.error(f"Request failed: {e}")
+                    st.error(f"Error fetching data: {data_resp.text}")
+            except Exception as e:
+                st.error(f"Request failed: {e}")
+    else:
+        st.warning("No tables found. Please create one first.")
+
+
+elif menu == "Delete Table":
+    st.title("🗑 Delete Table")
+
+    # Fetch table list
+    try:
+        tables = requests.get(f"{API_BASE}/tables").json()
+        table_names = [t["table_name"] for t in tables]
+    except Exception as e:
+        st.error(f"Failed to load tables: {e}")
+        table_names = []
+
+    if table_names:
+        table_to_delete = st.selectbox("Select Table to Delete", table_names)
+        confirm = st.checkbox("Yes, I want to delete this table permanently")
+
+        if confirm and st.button("Delete Table"):
+            try:
+                res = requests.delete(f"{API_BASE}/tables/{table_to_delete}")
+                if res.ok:
+                    st.success(f"✅ Table `{table_to_delete}` deleted successfully!")
+                else:
+                    st.error(f"❌ Failed: {res.text}")
+            except Exception as e:
+                st.error(f"Request failed: {e}")
+    else:
+        st.warning("No tables available to delete")
 
 # --- 4. MANUAL REFRESH ---
 elif menu == "Manual Refresh":
