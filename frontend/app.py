@@ -1,0 +1,181 @@
+import streamlit as st
+import requests
+import pandas as pd
+import time
+
+# --- CONFIG ---
+API_BASE = "http://localhost:8080"  # your Go server
+
+SQL_TYPES = [
+    "SERIAL PRIMARY KEY",
+    "INTEGER",
+    "BIGINT",
+    "FLOAT",
+    "NUMERIC",
+    "BOOLEAN",
+    "TEXT",
+    "VARCHAR(255)",
+    "DATE",
+    "TIMESTAMP",
+    "UUID"
+]
+
+st.set_page_config(page_title="GoDataFlow Dashboard", layout="wide")
+
+st.title("📊 GoDataFlow Dashboard")
+st.sidebar.title("Navigation")
+
+menu = st.sidebar.radio("Select a view:", ["List Tables", "Create Table", "View Data", "Manual Refresh"])
+
+# --- 1. LIST TABLES ---
+if menu == "List Tables":
+    st.subheader("Existing Tables")
+
+    try:
+        resp = requests.get(f"{API_BASE}/tables")
+        if resp.status_code == 200:
+            tables = resp.json()
+            if tables:
+                df = pd.DataFrame(tables)
+                st.dataframe(df)
+            else:
+                st.info("No tables found.")
+        else:
+            st.error(f"Error: {resp.status_code}")
+    except Exception as e:
+        st.error(f"Failed to fetch tables: {e}")
+
+# --- 2. CREATE TABLE ---
+elif menu == "Create Table":
+    st.subheader("Create New Table")
+
+    table_name = st.text_input("Table Name", placeholder="e.g. temperature_data")
+    table_type = st.selectbox("Table Type", ["normal", "time_series"])
+    refresh_interval = st.number_input("Refresh Interval (seconds)", min_value=0, step=10)
+
+    st.markdown("### Define Columns")
+    st.caption("Enter column name and SQL type (e.g. `id` → `SERIAL PRIMARY KEY`, `value` → `FLOAT`, `timestamp` → `TIMESTAMP`).")
+
+    # Let the user add multiple columns dynamically
+    col_count = st.number_input("Number of columns", min_value=1, max_value=10, value=2)
+    columns = {}
+
+    for i in range(col_count):
+        col1, col2 = st.columns(2)
+        with col1:
+            col_name = st.text_input(f"Column {i+1} Name", key=f"name_{i}")
+        with col2:
+            col_type = st.selectbox(f"Column {i+1} Type", SQL_TYPES, key=f"type_{i}")
+        if col_name and col_type:
+            columns[col_name] = col_type
+
+    if st.button("Create Table"):
+        if not table_name or not columns:
+            st.warning("Please provide a table name and at least one column.")
+        else:
+            payload = {
+                "table_name": table_name,
+                "table_type": table_type,
+                "refresh_interval": refresh_interval if refresh_interval > 0 else None,
+                "columns": columns
+            }
+
+            try:
+                resp = requests.post(f"{API_BASE}/tables", json=payload)
+                if resp.status_code == 201:
+                    st.success(f"Table '{table_name}' created successfully!")
+                else:
+                    st.error(f"Failed: {resp.text}")
+            except Exception as e:
+                st.error(f"Error sending request: {e}")
+
+# --- 3. VIEW DATA ---
+elif menu == "View Data":
+    st.subheader("View and Visualize Table Data")
+
+    resp = requests.get(f"{API_BASE}/tables")
+    tables = resp.json() if resp.status_code == 200 else []
+    table_names = [t["table_name"] for t in tables] if tables else []
+
+    selected_table = st.selectbox("Select Table", table_names)
+    if selected_table and st.button("Load Data"):
+        try:
+            resp = requests.get(f"{API_BASE}/query", params={"table": selected_table})
+            if resp.status_code == 200:
+                data = resp.json()
+                if data:
+                    df = pd.DataFrame(data)
+                    st.dataframe(df)
+
+                    if "timestamp" in df.columns and "value" in df.columns:
+                        st.line_chart(df.set_index("timestamp")["value"])
+                    else:
+                        st.info("No time-series columns detected for chart.")
+                else:
+                    st.info("No data available in this table.")
+            else:
+                st.error(f"Error fetching data: {resp.text}")
+        except Exception as e:
+            st.error(f"Request failed: {e}")
+
+# --- 4. MANUAL REFRESH ---
+elif menu == "Manual Refresh":
+    st.subheader("Trigger Manual Refresh")
+
+    resp = requests.get(f"{API_BASE}/tables")
+    tables = resp.json() if resp.status_code == 200 else []
+    table_names = [t["table_name"] for t in tables if t["table_type"] == "time_series"]
+
+    selected_table = st.selectbox("Select Time-Series Table", table_names)
+    if selected_table and st.button("Refresh Now"):
+        try:
+            resp = requests.post(f"{API_BASE}/ingest/{selected_table}")
+            if resp.status_code == 200:
+                st.success(f"Manual refresh triggered for {selected_table}")
+            else:
+                st.error(f"Error: {resp.text}")
+        except Exception as e:
+            st.error(f"Request failed: {e}")
+
+# --- 5. LIVE DASHBOARD ---
+elif menu == "Live Dashboard":
+    st.subheader("📈 Live Data Dashboard")
+
+    # Step 1: Choose a table
+    resp = requests.get(f"{API_BASE}/tables")
+    tables = resp.json() if resp.status_code == 200 else []
+    time_series_tables = [t["table_name"] for t in tables if t["table_type"] == "time_series"]
+
+    selected_table = st.selectbox("Select Time-Series Table", time_series_tables)
+    refresh_rate = st.slider("Refresh every (seconds):", 5, 60, 10)
+
+    # Step 2: Placeholder for chart
+    chart_placeholder = st.empty()
+    data_placeholder = st.empty()
+
+    # Step 3: Live update loop
+    if selected_table:
+        st.info("Live mode started — fetching updates continuously. Stop by changing menu.")
+        while True:
+            try:
+                resp = requests.get(f"{API_BASE}/query", params={"table": selected_table})
+                if resp.status_code == 200:
+                    data = resp.json()
+                    if data:
+                        df = pd.DataFrame(data)
+                        if "timestamp" in df.columns and "value" in df.columns:
+                            df["timestamp"] = pd.to_datetime(df["timestamp"])
+                            df = df.sort_values("timestamp")
+                            chart_placeholder.line_chart(df.set_index("timestamp")["value"])
+                            data_placeholder.dataframe(df.tail(5))
+                        else:
+                            chart_placeholder.warning("No 'timestamp' or 'value' columns found.")
+                    else:
+                        chart_placeholder.info("No data available yet.")
+                else:
+                    chart_placeholder.error(f"Error: {resp.text}")
+            except Exception as e:
+                chart_placeholder.error(f"Request failed: {e}")
+
+            time.sleep(refresh_rate)
+            st.rerun()  # refresh Streamlit loop safely

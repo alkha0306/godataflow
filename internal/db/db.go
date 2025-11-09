@@ -5,6 +5,7 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"runtime"
 
 	"github.com/jmoiron/sqlx"
 	_ "github.com/lib/pq"
@@ -26,7 +27,10 @@ func Connect(dbURL string) (*sqlx.DB, error) {
 
 // RunMigrations reads all SQL files in migrations folder and executes them
 func RunMigrations(db *sqlx.DB) error {
-	migrationsPath := "./db/migrations"
+	_, b, _, _ := runtime.Caller(0)
+	basepath := filepath.Dir(b)
+	migrationsPath := filepath.Join(basepath, "migrations")
+	// migrationsPath := ".internal/db/migrations" made this dynamic in above 3 lines
 	files, err := os.ReadDir(migrationsPath)
 	if err != nil {
 		return fmt.Errorf("failed to read migrations folder: %w", err)
