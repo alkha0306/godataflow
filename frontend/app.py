@@ -306,37 +306,67 @@ elif menu == "Refresh History":
             st.info("No logs found yet.")
 
 elif menu == "Data Source Config":
-    st.title("⚙️ Data Source Configuration")
+    st.subheader("Configure Data & Refresh Settings")
 
-    # Fetch all tables
-    tables = requests.get(f"{API_BASE}/tables").json()
-    table_names = [t["table_name"] for t in tables]
+    # Load tables
+    resp = requests.get(f"{API_BASE}/tables")
+    tables = resp.json() if resp.ok else []
+    table_names = [t["table_name"] for t in tables if t["table_type"] == "time_series"]
 
-    table = st.selectbox("Select Table", table_names)
+    if not table_names:
+        st.info("No time-series tables found.")
+    else:
+        selected = st.selectbox("Select Table", table_names)
 
-    if table:
-        # show existing metadata
-        meta = next((x for x in tables if x["table_name"] == table), None)
+        # Find current metadata record
+        meta = next((t for t in tables if t["table_name"] == selected), None)
 
-        st.subheader("Current Settings")
-        st.json(meta)
+        st.write("### Refresh Configuration")
 
-        st.subheader("Update Settings")
+        enable = st.checkbox(
+            "Enable Auto Refresh",
+            value = meta.get("refresh_interval") is not None
+        )
 
-        url = st.text_input("Data Source URL", meta.get("data_source_url", ""))
-        interval = st.number_input("Refresh Interval (seconds)", min_value=5, value=meta.get("refresh_interval") or 60)
+        interval = None
+        if enable:
+            interval = st.number_input(
+                "Refresh interval (seconds)",
+                min_value=1,
+                step=1,
+                value = meta.get("refresh_interval") or 30
+            )
+
+        # Optional URL
+        data_url = st.text_input(
+            "Data Source URL",
+            value = meta.get("data_source_url") or ""
+        )
 
         if st.button("Save Settings"):
-            payload = {
-                "data_source_url": url,
-                "refresh_interval": interval,
-            }
-            resp = requests.put(f"{API_BASE}/tables/{table}/config", json=payload)
+            payload = {}
 
-            if resp.ok:
-                st.success("Settings updated!")
+            # Send refresh_interval correctly
+            if enable:
+                payload["refresh_interval"] = interval
             else:
-                st.error(resp.text)
+                payload["refresh_interval"] = None
+
+            # Send null instead of empty string for data_url
+            payload["data_source_url"] = data_url if data_url.strip() else None
+
+            try:
+                res = requests.put(
+                    f"{API_BASE}/tables/{selected}/config",
+                    json=payload
+                )
+
+                if res.ok:
+                    st.success("Settings updated successfully!")
+                else:
+                    st.error(f"Failed: {res.text}")
+            except Exception as e:
+                st.error(f"Request failed: {e}")
 
 # --- 5. LIVE DASHBOARD ---
 elif menu == "Live Dashboard":

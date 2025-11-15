@@ -141,30 +141,55 @@ func (h *TableHandler) GetTableColumns(c *gin.Context) {
 	c.JSON(http.StatusOK, cols)
 }
 
+type UpdateTableConfigRequest struct {
+	RefreshInterval *int    `json:"refresh_interval"` // nullable
+	DataSourceURL   *string `json:"data_source_url"`
+}
+
 // PUT /tables/:name/config
 func (h *TableHandler) UpdateTableConfig(c *gin.Context) {
 	table := c.Param("name")
 
-	var req struct {
-		DataSourceURL   *string `json:"data_source_url"`
-		RefreshInterval *int    `json:"refresh_interval"`
-	}
-
+	var req UpdateTableConfigRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request body"})
 		return
 	}
 
-	_, err := h.DB.Exec(`
-		UPDATE table_metadata
-		SET data_source_url = COALESCE($1, data_source_url),
-		    refresh_interval = COALESCE($2, refresh_interval),
-		    updated_at = NOW()
-		WHERE table_name = $3
-	`, req.DataSourceURL, req.RefreshInterval, table)
+	updates := []string{}
+	args := []interface{}{}
+	idx := 1
 
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to update metadata", "details": err.Error()})
+	// Update URL (set or clear)
+
+	updates = append(updates, fmt.Sprintf("data_source_url = $%d", idx))
+	args = append(args, req.DataSourceURL)
+	idx++
+
+	// Update refresh interval (set or null)
+
+	updates = append(updates, fmt.Sprintf("refresh_interval = $%d", idx))
+	args = append(args, req.RefreshInterval)
+	idx++
+
+	if len(updates) == 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "no fields provided"})
+		return
+	}
+
+	args = append(args, table)
+
+	query := fmt.Sprintf(`
+        UPDATE table_metadata
+        SET %s, updated_at = NOW()
+        WHERE table_name = $%d
+    `, strings.Join(updates, ", "), idx)
+
+	if _, err := h.DB.Exec(query, args...); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error":   "failed to update metadata",
+			"details": err.Error(),
+		})
 		return
 	}
 
