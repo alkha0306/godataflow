@@ -68,6 +68,13 @@ func main() {
 	router.POST("/queries", queryTemplateHandler.CreateQuery)
 	router.GET("/queries/run/:id", queryTemplateHandler.RunSavedQuery)
 
+	// Manual Refresh API
+	refreshHandler := handlers.NewRefreshHandler(database)
+	router.POST("/refresh/:table", refreshHandler.ManualRefresh)
+
+	refreshLogsHandler := handlers.NewRefreshLogsHandler(database)
+	router.GET("/refresh_logs/:table", refreshLogsHandler.GetLogs)
+
 	// 4. Start server with graceful shutdown
 	srv := &http.Server{
 		Addr:    ":" + cfg.Port,

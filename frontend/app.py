@@ -26,7 +26,7 @@ st.set_page_config(page_title="GoDataFlow Dashboard", layout="wide")
 st.title("📊 GoDataFlow Dashboard")
 st.sidebar.title("Navigation")
 
-menu = st.sidebar.radio("Select a view:", ["List Tables", "Create Table", "Data Ingestion", "View Data", "Delete Table", "Manual Refresh"])
+menu = st.sidebar.radio("Select a view:", ["List Tables", "Create Table", "Data Ingestion", "View Data", "Delete Table", "Manual Refresh", "Refresh History", "Data Source Config"])
 
 # --- 1. LIST TABLES ---
 if menu == "List Tables":
@@ -270,6 +270,72 @@ elif menu == "Manual Refresh":
                 st.error(f"Error: {resp.text}")
         except Exception as e:
             st.error(f"Request failed: {e}")
+
+elif menu == "Refresh History":
+    st.title("📜 Refresh History")
+
+    # Fetch tables
+    try:
+        tables = requests.get(f"{API_BASE}/tables").json()
+        table_names = [t["table_name"] for t in tables]
+    except:
+        table_names = []
+
+    table = st.selectbox("Select Table", table_names)
+
+    if table:
+        try:
+            logs = requests.get(f"{API_BASE}/refresh_logs/{table}").json()
+        except Exception as e:
+            st.error(f"Failed to load logs: {e}")
+            logs = []
+
+        if logs:
+            st.subheader(f"Last refresh attempts for `{table}`")
+
+            df = pd.DataFrame(logs)
+            df["created_at"] = pd.to_datetime(df["created_at"])
+
+            st.dataframe(df)
+
+            st.write("### Status Breakdown")
+            st.bar_chart(df["status"].value_counts())
+
+        else:
+            st.info("No logs found yet.")
+
+elif menu == "Data Source Config":
+    st.title("⚙️ Data Source Configuration")
+
+    # Fetch all tables
+    tables = requests.get(f"{API_BASE}/tables").json()
+    table_names = [t["table_name"] for t in tables]
+
+    table = st.selectbox("Select Table", table_names)
+
+    if table:
+        # show existing metadata
+        meta = next((x for x in tables if x["table_name"] == table), None)
+
+        st.subheader("Current Settings")
+        st.json(meta)
+
+        st.subheader("Update Settings")
+
+        url = st.text_input("Data Source URL", meta.get("data_source_url", ""))
+        interval = st.number_input("Refresh Interval (seconds)", min_value=5, value=meta.get("refresh_interval") or 60)
+
+        if st.button("Save Settings"):
+            payload = {
+                "data_source_url": url,
+                "refresh_interval": interval,
+            }
+            resp = requests.put(f"{API_BASE}/tables/{table}/config", json=payload)
+
+            if resp.ok:
+                st.success("Settings updated!")
+            else:
+                st.error(resp.text)
 
 # --- 5. LIVE DASHBOARD ---
 elif menu == "Live Dashboard":

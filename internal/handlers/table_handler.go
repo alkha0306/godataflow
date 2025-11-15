@@ -140,3 +140,36 @@ func (h *TableHandler) GetTableColumns(c *gin.Context) {
 	}
 	c.JSON(http.StatusOK, cols)
 }
+
+// PUT /tables/:name/config
+func (h *TableHandler) UpdateTableConfig(c *gin.Context) {
+	table := c.Param("name")
+
+	var req struct {
+		DataSourceURL   *string `json:"data_source_url"`
+		RefreshInterval *int    `json:"refresh_interval"`
+	}
+
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request body"})
+		return
+	}
+
+	_, err := h.DB.Exec(`
+		UPDATE table_metadata
+		SET data_source_url = COALESCE($1, data_source_url),
+		    refresh_interval = COALESCE($2, refresh_interval),
+		    updated_at = NOW()
+		WHERE table_name = $3
+	`, req.DataSourceURL, req.RefreshInterval, table)
+
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to update metadata", "details": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"message": "config updated",
+		"table":   table,
+	})
+}
