@@ -77,6 +77,9 @@ func main() {
 
 	router.PUT("/tables/:name/config", tableHandler.UpdateTableConfig)
 
+	// Preview endpoint for ETL mapping wizard
+	router.GET("/preview_source", handlers.PreviewSourceHandler)
+
 	// 4. Start server with graceful shutdown
 	srv := &http.Server{
 		Addr:    ":" + cfg.Port,
