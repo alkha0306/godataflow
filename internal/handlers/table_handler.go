@@ -16,12 +16,16 @@ type TableHandler struct {
 
 // TableMetadata represents a record in table_metadata
 type TableMetadata struct {
-	ID              int       `db:"id" json:"id"`
-	TableName       string    `db:"table_name" json:"table_name"`
-	TableType       string    `db:"table_type" json:"table_type"`
-	RefreshInterval *int      `db:"refresh_interval" json:"refresh_interval,omitempty"`
-	CreatedAt       time.Time `db:"created_at" json:"created_at"`
-	UpdatedAt       time.Time `db:"updated_at" json:"updated_at"`
+	ID                 int        `db:"id" json:"id"`
+	TableName          string     `db:"table_name" json:"table_name"`
+	TableType          string     `db:"table_type" json:"table_type"`
+	RefreshInterval    *int       `db:"refresh_interval" json:"refresh_interval,omitempty"`
+	DataSourceURL      *string    `db:"data_source_url" json:"data_source_url,omitempty"`
+	LastRefreshSuccess *time.Time `db:"last_refresh_success" json:"last_refresh_success,omitempty"`
+	LastRefreshError   *string    `db:"last_refresh_error" json:"last_refresh_error,omitempty"`
+	Status             string     `db:"status" json:"status"`
+	CreatedAt          time.Time  `db:"created_at" json:"created_at"`
+	UpdatedAt          time.Time  `db:"updated_at" json:"updated_at"`
 }
 
 func NewTableHandler(db *sqlx.DB) *TableHandler {
