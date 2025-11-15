@@ -4,6 +4,9 @@ import pandas as pd
 import time
 import json
 
+from pages.etl_mapping import etl_mapping_wizard
+
+
 # --- CONFIG ---
 API_BASE = "http://localhost:8080"  # your Go server
 
@@ -26,7 +29,7 @@ st.set_page_config(page_title="GoDataFlow Dashboard", layout="wide")
 st.title("📊 GoDataFlow Dashboard")
 st.sidebar.title("Navigation")
 
-menu = st.sidebar.radio("Select a view:", ["List Tables", "Create Table", "Data Ingestion", "View Data", "Delete Table", "Manual Refresh", "Refresh History", "Data Source Config"])
+menu = st.sidebar.radio("Select a view:", ["List Tables", "Create Table", "Data Ingestion", "View Data", "Delete Table", "Manual Refresh", "Refresh History", "Data Source Config","ETL Mapping Wizard"])
 
 # --- 1. LIST TABLES ---
 if menu == "List Tables":
@@ -410,3 +413,6 @@ elif menu == "Live Dashboard":
 
             time.sleep(refresh_rate)
             st.rerun()  # refresh Streamlit loop safely
+
+elif menu == "ETL Mapping Wizard":
+    etl_mapping_wizard(API_BASE)

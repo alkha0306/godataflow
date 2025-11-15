@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"strings"
@@ -16,16 +17,17 @@ type TableHandler struct {
 
 // TableMetadata represents a record in table_metadata
 type TableMetadata struct {
-	ID                 int        `db:"id" json:"id"`
-	TableName          string     `db:"table_name" json:"table_name"`
-	TableType          string     `db:"table_type" json:"table_type"`
-	RefreshInterval    *int       `db:"refresh_interval" json:"refresh_interval,omitempty"`
-	DataSourceURL      *string    `db:"data_source_url" json:"data_source_url,omitempty"`
-	LastRefreshSuccess *time.Time `db:"last_refresh_success" json:"last_refresh_success,omitempty"`
-	LastRefreshError   *string    `db:"last_refresh_error" json:"last_refresh_error,omitempty"`
-	Status             string     `db:"status" json:"status"`
-	CreatedAt          time.Time  `db:"created_at" json:"created_at"`
-	UpdatedAt          time.Time  `db:"updated_at" json:"updated_at"`
+	ID                 int             `db:"id" json:"id"`
+	TableName          string          `db:"table_name" json:"table_name"`
+	TableType          string          `db:"table_type" json:"table_type"`
+	RefreshInterval    *int            `db:"refresh_interval" json:"refresh_interval,omitempty"`
+	DataSourceURL      *string         `db:"data_source_url" json:"data_source_url,omitempty"`
+	LastRefreshSuccess *time.Time      `db:"last_refresh_success" json:"last_refresh_success,omitempty"`
+	LastRefreshError   *string         `db:"last_refresh_error" json:"last_refresh_error,omitempty"`
+	Status             string          `db:"status" json:"status"`
+	MappingJSON        json.RawMessage `db:"mapping_json" json:"mapping_json,omitempty"`
+	CreatedAt          time.Time       `db:"created_at" json:"created_at"`
+	UpdatedAt          time.Time       `db:"updated_at" json:"updated_at"`
 }
 
 func NewTableHandler(db *sqlx.DB) *TableHandler {
@@ -142,8 +144,9 @@ func (h *TableHandler) GetTableColumns(c *gin.Context) {
 }
 
 type UpdateTableConfigRequest struct {
-	RefreshInterval *int    `json:"refresh_interval"` // nullable
-	DataSourceURL   *string `json:"data_source_url"`
+	RefreshInterval *int            `json:"refresh_interval"` // nullable
+	DataSourceURL   *string         `json:"data_source_url"`  //nullable
+	MappingJSON     json.RawMessage `json:"mapping_json"`
 }
 
 // PUT /tables/:name/config
@@ -171,6 +174,13 @@ func (h *TableHandler) UpdateTableConfig(c *gin.Context) {
 	updates = append(updates, fmt.Sprintf("refresh_interval = $%d", idx))
 	args = append(args, req.RefreshInterval)
 	idx++
+
+	// Update mapping_json if provided
+	if req.MappingJSON != nil {
+		updates = append(updates, fmt.Sprintf("mapping_json = $%d", idx))
+		args = append(args, req.MappingJSON)
+		idx++
+	}
 
 	if len(updates) == 0 {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "no fields provided"})
