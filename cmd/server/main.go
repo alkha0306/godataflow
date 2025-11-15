@@ -75,6 +75,8 @@ func main() {
 	refreshLogsHandler := handlers.NewRefreshLogsHandler(database)
 	router.GET("/refresh_logs/:table", refreshLogsHandler.GetLogs)
 
+	router.PUT("/tables/:name/config", tableHandler.UpdateTableConfig)
+
 	// 4. Start server with graceful shutdown
 	srv := &http.Server{
 		Addr:    ":" + cfg.Port,
