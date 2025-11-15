@@ -261,9 +261,10 @@ elif menu == "Manual Refresh":
     table_names = [t["table_name"] for t in tables if t["table_type"] == "time_series"]
 
     selected_table = st.selectbox("Select Time-Series Table", table_names)
+
     if selected_table and st.button("Refresh Now"):
         try:
-            resp = requests.post(f"{API_BASE}/ingest/{selected_table}")
+            resp = requests.post(f"{API_BASE}/refresh/{selected_table}")
             if resp.status_code == 200:
                 st.success(f"Manual refresh triggered for {selected_table}")
             else:
