@@ -14,20 +14,53 @@ def etl_automation_page():
     with tabs[0]:
         st.subheader("ETL Mapping Wizard")
 
-        url = st.text_input("Source API URL", key = "etl_src_url_map_mapping_wiz")
-        if st.button("Preview JSON", key = "etl_preview_button_map_mapping_wiz"):
+        # Step 1: Source URL
+        url = st.text_input("Source API URL", key="etl_src_url_map_mapping_wiz")
+
+        # Optional preview
+        if st.button("Preview JSON", key="etl_preview_button_map_mapping_wiz"):
             preview = api_get(f"{API_BASE}/preview_source", params={"url": url})
             st.json(preview)
 
+        # Step 2: Select time-series table
         tables = api_get(f"{API_BASE}/tables") or []
         ts_tables = [t["table_name"] for t in tables if t["table_type"] == "time_series"]
-        table = st.selectbox("Map to Table", ts_tables, key = "etl_table_select_mapping_wiz")
 
-        mapping_text = st.text_area("Field Mapping (JSON)", key = "etl_field_map_mapping_wiz")
-        if st.button("Save Mapping", key = "etl_save_mapping_wiz"):
-            payload = {"mapping_json": json.loads(mapping_text)}
-            res = api_put(f"{API_BASE}/tables/{table}/config", json=payload)
+        table = st.selectbox("Map to Table", ts_tables, key="etl_table_select_mapping_wiz")
+
+        # Step 3: Get table schema columns
+        col_res = api_get(f"{API_BASE}/tables/{table}/columns") or []
+
+        # Step 4: Simple manual mapping:
+        # USER enters source JSON key for each COLUMN
+        st.write("### Map Table Columns to API Keys")
+
+        mapping = {}
+
+        for col_info in col_res:
+            col_name = col_info["column_name"]
+
+            api_key = st.text_input(
+                f"API Key for column '{col_name}'",
+                key=f"map_{col_name}",
+                placeholder="Enter key from API JSON"
+            )
+
+            if api_key.strip():
+                mapping[api_key] = col_name   # api_key → db column
+
+        st.write("### Generated Mapping JSON")
+        st.json(mapping)
+
+        # Save button
+        if st.button("Save Mapping", key="etl_save_mapping_wiz"):
+            res = api_put(
+                f"{API_BASE}/tables/{table}/config",
+                json={"mapping_json": mapping}
+            )
             st.success("Saved!" if res else "Failed")
+
+
 
     # --- AUTO REFRESH CONFIG ---
     with tabs[1]:
